@@ -39,6 +39,39 @@ export function shouldSkipControlUiPairing(
   return policy.allowBypass && sharedAuthOk;
 }
 
+/**
+ * Decide whether a connecting client may skip per-device pairing.
+ *
+ * Pairing binds a cryptographic device key on first connect. It is skipped when
+ * gateway-level trust is already established by other means:
+ *  - Control UI with `dangerouslyDisableDeviceAuth`.
+ *  - Trusted-proxy auth: the reverse proxy authenticated the user (verified
+ *    source IP + signed user header), so pairing is redundant. Unlike a shared
+ *    token/password, no stealable secret lives in the browser, so this also
+ *    covers Control UI / webchat operator connections.
+ *  - Shared token/password for non-browser operator clients (e.g. CLI). Browser
+ *    surfaces still pair so a device key is bound on first use.
+ */
+export function shouldSkipDevicePairing(params: {
+  controlUiAuthPolicy: ControlUiAuthPolicy;
+  role: GatewayRole;
+  isControlUi: boolean;
+  isWebchat: boolean;
+  sharedAuthOk: boolean;
+  trustedProxyAuthOk: boolean;
+}): boolean {
+  if (shouldSkipControlUiPairing(params.controlUiAuthPolicy, params.sharedAuthOk)) {
+    return true;
+  }
+  if (params.role !== "operator") {
+    return false;
+  }
+  if (params.trustedProxyAuthOk) {
+    return true;
+  }
+  return params.sharedAuthOk && !params.isControlUi && !params.isWebchat;
+}
+
 export type MissingDeviceIdentityDecision =
   | { kind: "allow" }
   | { kind: "reject-control-ui-insecure-auth" }

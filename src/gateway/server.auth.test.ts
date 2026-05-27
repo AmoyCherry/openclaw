@@ -928,6 +928,39 @@ describe("gateway server auth/connect", () => {
     }
   });
 
+  test("skips control ui pairing when trusted-proxy auth succeeds", async () => {
+    testState.gatewayAuth = {
+      mode: "trusted-proxy",
+      trustedProxy: { userHeader: "x-authentik-username" },
+    };
+    const { writeConfigFile } = await import("../config/config.js");
+    await writeConfigFile({
+      gateway: {
+        trustedProxies: ["127.0.0.1", "::1"],
+      },
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any);
+    await withGatewayServer(async ({ port }) => {
+      const ws = await openWs(port, {
+        origin: originForPort(port),
+        "x-authentik-username": "alice",
+      });
+      // Control UI presents a (browser-generated) device identity, but trusted-proxy
+      // auth establishes gateway trust, so pairing must be skipped instead of
+      // returning "pairing required".
+      const res = await connectReq(ws, {
+        skipDefaultAuth: true,
+        scopes: ["operator.read"],
+        client: { ...CONTROL_UI_CLIENT },
+      });
+      expect(res.ok).toBe(true);
+      expect((res.payload as { type?: unknown } | undefined)?.type).toBe("hello-ok");
+      const health = await rpcReq(ws, "health");
+      expect(health.ok).toBe(true);
+      ws.close();
+    });
+  });
+
   test("device token auth matrix", async () => {
     const { server, ws, port, prevToken } = await startServerWithClient("secret");
     const { deviceToken } = await ensurePairedDeviceTokenForCurrentIdentity(ws);

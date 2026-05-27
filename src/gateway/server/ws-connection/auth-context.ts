@@ -25,6 +25,7 @@ export type ConnectAuthState = {
   authOk: boolean;
   authMethod: GatewayAuthResult["method"];
   sharedAuthOk: boolean;
+  trustedProxyAuthOk: boolean;
   sharedAuthProvided: boolean;
   deviceTokenCandidate?: string;
   deviceTokenCandidateSource?: DeviceTokenCandidateSource;
@@ -134,12 +135,14 @@ export async function resolveConnectAuthState(params: {
       rateLimitScope: AUTH_RATE_LIMIT_SCOPE_SHARED_SECRET,
     }));
   // Trusted-proxy auth is semantically shared: the proxy vouches for identity,
-  // no per-device credential needed. Include it so operator connections
-  // can skip device identity via roleCanSkipDeviceIdentity().
+  // no per-device credential needed. Include it so operator connections can skip
+  // device identity via roleCanSkipDeviceIdentity() and skip device pairing
+  // (browser surfaces included, since no stealable secret is involved).
+  const trustedProxyAuthOk = authResult.ok && authResult.method === "trusted-proxy";
   const sharedAuthOk =
     (sharedAuthResult?.ok === true &&
       (sharedAuthResult.method === "token" || sharedAuthResult.method === "password")) ||
-    (authResult.ok && authResult.method === "trusted-proxy");
+    trustedProxyAuthOk;
 
   return {
     authResult,
@@ -147,6 +150,7 @@ export async function resolveConnectAuthState(params: {
     authMethod:
       authResult.method ?? (params.resolvedAuth.mode === "password" ? "password" : "token"),
     sharedAuthOk,
+    trustedProxyAuthOk,
     sharedAuthProvided,
     deviceTokenCandidate,
     deviceTokenCandidateSource,

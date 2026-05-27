@@ -3,6 +3,7 @@ import {
   evaluateMissingDeviceIdentity,
   resolveControlUiAuthPolicy,
   shouldSkipControlUiPairing,
+  shouldSkipDevicePairing,
 } from "./connect-policy.js";
 
 describe("ws connect policy", () => {
@@ -162,5 +163,114 @@ describe("ws connect policy", () => {
     expect(shouldSkipControlUiPairing(bypass, true)).toBe(true);
     expect(shouldSkipControlUiPairing(bypass, false)).toBe(false);
     expect(shouldSkipControlUiPairing(strict, true)).toBe(false);
+  });
+
+  describe("shouldSkipDevicePairing", () => {
+    const strictControlUi = resolveControlUiAuthPolicy({
+      isControlUi: true,
+      controlUiConfig: undefined,
+      deviceRaw: null,
+    });
+    const bypassControlUi = resolveControlUiAuthPolicy({
+      isControlUi: true,
+      controlUiConfig: { dangerouslyDisableDeviceAuth: true },
+      deviceRaw: null,
+    });
+    const nonControlUi = resolveControlUiAuthPolicy({
+      isControlUi: false,
+      controlUiConfig: undefined,
+      deviceRaw: null,
+    });
+
+    test("trusted-proxy operator Control UI skips pairing without dangerouslyDisableDeviceAuth", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: strictControlUi,
+          role: "operator",
+          isControlUi: true,
+          isWebchat: false,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: true,
+        }),
+      ).toBe(true);
+    });
+
+    test("trusted-proxy webchat operator skips pairing", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: nonControlUi,
+          role: "operator",
+          isControlUi: false,
+          isWebchat: true,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: true,
+        }),
+      ).toBe(true);
+    });
+
+    test("token/password shared auth still requires pairing for Control UI", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: strictControlUi,
+          role: "operator",
+          isControlUi: true,
+          isWebchat: false,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: false,
+        }),
+      ).toBe(false);
+    });
+
+    test("token/password shared auth skips pairing for non-browser operator (CLI)", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: nonControlUi,
+          role: "operator",
+          isControlUi: false,
+          isWebchat: false,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: false,
+        }),
+      ).toBe(true);
+    });
+
+    test("dangerouslyDisableDeviceAuth bypass still skips Control UI pairing", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: bypassControlUi,
+          role: "operator",
+          isControlUi: true,
+          isWebchat: false,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: false,
+        }),
+      ).toBe(true);
+    });
+
+    test("node role never skips pairing, even with trusted-proxy auth", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: nonControlUi,
+          role: "node",
+          isControlUi: false,
+          isWebchat: false,
+          sharedAuthOk: true,
+          trustedProxyAuthOk: true,
+        }),
+      ).toBe(false);
+    });
+
+    test("no shared auth and no trusted proxy requires pairing", () => {
+      expect(
+        shouldSkipDevicePairing({
+          controlUiAuthPolicy: nonControlUi,
+          role: "operator",
+          isControlUi: false,
+          isWebchat: false,
+          sharedAuthOk: false,
+          trustedProxyAuthOk: false,
+        }),
+      ).toBe(false);
+    });
   });
 });

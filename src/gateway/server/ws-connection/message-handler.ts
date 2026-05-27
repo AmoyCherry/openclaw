@@ -76,7 +76,7 @@ import { formatGatewayAuthFailureMessage, type AuthProvidedKind } from "./auth-m
 import {
   evaluateMissingDeviceIdentity,
   resolveControlUiAuthPolicy,
-  shouldSkipControlUiPairing,
+  shouldSkipDevicePairing,
 } from "./connect-policy.js";
 import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-flood-guard.js";
 
@@ -368,6 +368,7 @@ export function attachGatewayWsMessageHandler(params: {
           authOk,
           authMethod,
           sharedAuthOk,
+          trustedProxyAuthOk,
           deviceTokenCandidate,
           deviceTokenCandidateSource,
         } = await resolveConnectAuthState({
@@ -542,6 +543,7 @@ export function attachGatewayWsMessageHandler(params: {
             authOk,
             authMethod,
             sharedAuthOk,
+            trustedProxyAuthOk,
             sharedAuthProvided: hasSharedAuth,
             deviceTokenCandidate,
             deviceTokenCandidateSource,
@@ -559,13 +561,17 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
 
-        // Shared token/password auth is already gateway-level trust for operator clients.
-        // In that case, don't force device pairing on first connect.
-        const skipPairingForOperatorSharedAuth =
-          role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
-        const skipPairing =
-          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
-          skipPairingForOperatorSharedAuth;
+        // Skip per-device pairing when gateway-level trust is already established
+        // (trusted-proxy auth, shared secret for non-browser operators, or
+        // dangerouslyDisableDeviceAuth for Control UI). See shouldSkipDevicePairing.
+        const skipPairing = shouldSkipDevicePairing({
+          controlUiAuthPolicy,
+          role,
+          isControlUi,
+          isWebchat,
+          sharedAuthOk,
+          trustedProxyAuthOk,
+        });
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {
