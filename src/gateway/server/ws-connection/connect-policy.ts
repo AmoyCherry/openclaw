@@ -39,6 +39,21 @@ export function shouldSkipControlUiPairing(
   return policy.allowBypass && sharedAuthOk;
 }
 
+/**
+ * Trusted-proxy auth is a distinct trust model: the reverse proxy is the trust
+ * boundary and vouches for the user identity via the configured user header, so
+ * device pairing is redundant. Unlike shared token/password auth (which keeps
+ * device pairing for browsers as MitM protection, see #20684), this also applies
+ * to Control UI, which otherwise cannot complete pairing behind a trusted proxy.
+ */
+export function shouldSkipPairingForTrustedProxy(params: {
+  role: GatewayRole;
+  authMethod: string | undefined;
+  isWebchat: boolean;
+}): boolean {
+  return params.role === "operator" && params.authMethod === "trusted-proxy" && !params.isWebchat;
+}
+
 export type MissingDeviceIdentityDecision =
   | { kind: "allow" }
   | { kind: "reject-control-ui-insecure-auth" }

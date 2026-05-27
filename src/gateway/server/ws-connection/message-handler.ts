@@ -77,6 +77,7 @@ import {
   evaluateMissingDeviceIdentity,
   resolveControlUiAuthPolicy,
   shouldSkipControlUiPairing,
+  shouldSkipPairingForTrustedProxy,
 } from "./connect-policy.js";
 import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-flood-guard.js";
 
@@ -565,7 +566,8 @@ export function attachGatewayWsMessageHandler(params: {
           role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
         const skipPairing =
           shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
-          skipPairingForOperatorSharedAuth;
+          skipPairingForOperatorSharedAuth ||
+          shouldSkipPairingForTrustedProxy({ role, authMethod, isWebchat });
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {

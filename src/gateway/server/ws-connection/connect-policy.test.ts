@@ -3,6 +3,7 @@ import {
   evaluateMissingDeviceIdentity,
   resolveControlUiAuthPolicy,
   shouldSkipControlUiPairing,
+  shouldSkipPairingForTrustedProxy,
 } from "./connect-policy.js";
 
 describe("ws connect policy", () => {
@@ -162,5 +163,40 @@ describe("ws connect policy", () => {
     expect(shouldSkipControlUiPairing(bypass, true)).toBe(true);
     expect(shouldSkipControlUiPairing(bypass, false)).toBe(false);
     expect(shouldSkipControlUiPairing(strict, true)).toBe(false);
+  });
+
+  test("skips pairing for trusted-proxy operator (incl. Control UI)", () => {
+    // Trusted-proxy operators skip pairing regardless of surface (Control UI included).
+    expect(
+      shouldSkipPairingForTrustedProxy({
+        role: "operator",
+        authMethod: "trusted-proxy",
+        isWebchat: false,
+      }),
+    ).toBe(true);
+    // Webchat is excluded.
+    expect(
+      shouldSkipPairingForTrustedProxy({
+        role: "operator",
+        authMethod: "trusted-proxy",
+        isWebchat: true,
+      }),
+    ).toBe(false);
+    // Other auth methods do not bypass pairing here.
+    expect(
+      shouldSkipPairingForTrustedProxy({
+        role: "operator",
+        authMethod: "token",
+        isWebchat: false,
+      }),
+    ).toBe(false);
+    // Node role is never granted the operator skip.
+    expect(
+      shouldSkipPairingForTrustedProxy({
+        role: "node",
+        authMethod: "trusted-proxy",
+        isWebchat: false,
+      }),
+    ).toBe(false);
   });
 });
