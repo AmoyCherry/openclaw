@@ -928,6 +928,47 @@ describe("gateway server auth/connect", () => {
     }
   });
 
+  test("allows control ui behind trusted proxy to connect without device pairing", async () => {
+    testState.gatewayAuth = {
+      mode: "trusted-proxy",
+      trustedProxy: { userHeader: "x-test-user" },
+    };
+    const { writeConfigFile } = await import("../config/config.js");
+    await writeConfigFile({ gateway: { trustedProxies: ["127.0.0.1"] } } as never);
+    await withGatewayServer(async ({ port }) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
+        headers: {
+          origin: `http://127.0.0.1:${port}`,
+          "x-test-user": "testuser",
+        },
+      });
+      trackConnectChallengeNonce(ws);
+      await new Promise<void>((resolve) => ws.once("open", resolve));
+      const challengeNonce = await readConnectChallengeNonce(ws);
+      expect(challengeNonce).toBeTruthy();
+      const { randomUUID } = await import("node:crypto");
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const scopes = ["operator.read"];
+      const { device } = await createSignedDevice({
+        token: "",
+        scopes,
+        clientId: GATEWAY_CLIENT_NAMES.CONTROL_UI,
+        clientMode: GATEWAY_CLIENT_MODES.WEBCHAT,
+        identityPath: path.join(os.tmpdir(), `openclaw-trusted-proxy-${randomUUID()}.json`),
+        nonce: String(challengeNonce),
+      });
+      const res = await connectReq(ws, {
+        skipDefaultAuth: true,
+        scopes,
+        device,
+        client: { ...CONTROL_UI_CLIENT },
+      });
+      expect(res.ok).toBe(true);
+      ws.close();
+    });
+  });
+
   test("device token auth matrix", async () => {
     const { server, ws, port, prevToken } = await startServerWithClient("secret");
     const { deviceToken } = await ensurePairedDeviceTokenForCurrentIdentity(ws);

@@ -563,9 +563,13 @@ export function attachGatewayWsMessageHandler(params: {
         // In that case, don't force device pairing on first connect.
         const skipPairingForOperatorSharedAuth =
           role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
+        // Trusted-proxy auth means the proxy has already asserted user identity;
+        // device pairing adds no security value and would block all Control UI access.
+        const skipPairingForTrustedProxy = authMethod === "trusted-proxy";
         const skipPairing =
           shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
-          skipPairingForOperatorSharedAuth;
+          skipPairingForOperatorSharedAuth ||
+          skipPairingForTrustedProxy;
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {
