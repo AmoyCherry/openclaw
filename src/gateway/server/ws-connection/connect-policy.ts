@@ -39,6 +39,40 @@ export function shouldSkipControlUiPairing(
   return policy.allowBypass && sharedAuthOk;
 }
 
+/**
+ * Decide whether device pairing can be skipped on connect.
+ *
+ * Pairing is skipped when any of these hold:
+ * - Control UI opted out of device auth via `dangerouslyDisableDeviceAuth` and shared
+ *   auth succeeded (see {@link shouldSkipControlUiPairing}).
+ * - An operator client authenticated with a shared token/password. Browser clients
+ *   (Control UI / webchat) are excluded here and still pair as a MitM safeguard.
+ * - An operator client authenticated via trusted-proxy mode. The reverse proxy already
+ *   vouches for the user (via the configured `userHeader`) and the gateway only honors
+ *   that header from trusted proxy source IPs, so per-device pairing is redundant. This
+ *   case intentionally includes browser clients: otherwise trusted-proxy deployments
+ *   could not load the Control UI without setting `dangerouslyDisableDeviceAuth`.
+ */
+export function shouldSkipDevicePairing(params: {
+  controlUiAuthPolicy: ControlUiAuthPolicy;
+  role: GatewayRole;
+  isControlUi: boolean;
+  isWebchat: boolean;
+  sharedAuthOk: boolean;
+  trustedProxyAuthenticated: boolean;
+}): boolean {
+  if (shouldSkipControlUiPairing(params.controlUiAuthPolicy, params.sharedAuthOk)) {
+    return true;
+  }
+  if (params.role !== "operator") {
+    return false;
+  }
+  if (params.trustedProxyAuthenticated) {
+    return true;
+  }
+  return params.sharedAuthOk && !params.isControlUi && !params.isWebchat;
+}
+
 export type MissingDeviceIdentityDecision =
   | { kind: "allow" }
   | { kind: "reject-control-ui-insecure-auth" }

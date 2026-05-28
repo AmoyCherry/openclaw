@@ -208,7 +208,10 @@ The Gateway treats these as **claims** and enforces server-side allowlists.
   keypair fingerprint.
 - Gateways issue tokens per device + role.
 - Pairing approvals are required for new device IDs unless local auto-approval
-  is enabled.
+  is enabled. Operator clients the gateway already trusts at the connection level
+  skip pairing: shared token/password auth (non-browser clients) and
+  `trusted-proxy` auth (including Control UI / webchat, since the proxy already
+  authenticated the user).
 - **Local** connects include loopback and the gateway host’s own tailnet address
   (so same‑host tailnet binds can still auto‑approve).
 - All WS clients must include `device` identity during `connect` (operator + node).

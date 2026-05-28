@@ -891,6 +891,80 @@ describe("gateway server auth/connect", () => {
     }
   });
 
+  test("skips device pairing for control ui when trusted-proxy auth succeeds", async () => {
+    // Regression: trusted-proxy auth must work for Control UI WebSocket connects, not
+    // just the CLI. The reverse proxy authenticated the user via the configured
+    // userHeader, so the gateway must skip device pairing instead of returning
+    // "pairing required". Previously this required controlUi.dangerouslyDisableDeviceAuth.
+    testState.gatewayAuth = {
+      mode: "trusted-proxy",
+      trustedProxy: { userHeader: "x-authentik-username" },
+    };
+    const { writeConfigFile } = await import("../config/config.js");
+    await writeConfigFile({
+      gateway: {
+        trustedProxies: ["127.0.0.1", "::1"],
+      },
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any);
+    await withGatewayServer(async ({ port }) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
+        headers: {
+          origin: originForPort(port),
+          // Proxy forwards the real client IP and the authenticated username.
+          "x-forwarded-for": "203.0.113.10",
+          "x-authentik-username": "alice",
+        },
+      });
+      trackConnectChallengeNonce(ws);
+      await new Promise<void>((resolve) => ws.once("open", resolve));
+      const nonce = await readConnectChallengeNonce(ws);
+      expect(nonce).toBeTruthy();
+      const { randomUUID } = await import("node:crypto");
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const scopes = ["operator.read"];
+      // Trusted-proxy connects send no shared credentials, so the device payload is
+      // signed with a null token (matching how the server rebuilds the payload).
+      const { loadOrCreateDeviceIdentity, publicKeyRawBase64UrlFromPem, signDevicePayload } =
+        await import("../infra/device-identity.js");
+      const identity = loadOrCreateDeviceIdentity(
+        path.join(os.tmpdir(), `openclaw-controlui-trusted-proxy-${randomUUID()}.json`),
+      );
+      const signedAtMs = Date.now();
+      const payload = buildDeviceAuthPayload({
+        deviceId: identity.deviceId,
+        clientId: GATEWAY_CLIENT_NAMES.CONTROL_UI,
+        clientMode: GATEWAY_CLIENT_MODES.WEBCHAT,
+        role: "operator",
+        scopes,
+        signedAtMs,
+        token: null,
+        nonce: String(nonce),
+      });
+      const device = {
+        id: identity.deviceId,
+        publicKey: publicKeyRawBase64UrlFromPem(identity.publicKeyPem),
+        signature: signDevicePayload(identity.privateKeyPem, payload),
+        signedAt: signedAtMs,
+        nonce: String(nonce),
+      };
+      const res = await connectReq(ws, {
+        skipDefaultAuth: true,
+        scopes,
+        device,
+        client: { ...CONTROL_UI_CLIENT },
+      });
+      expect(res.ok).toBe(true);
+      // Pairing is skipped, so (like the dangerouslyDisableDeviceAuth bypass) no
+      // device token is minted — the proxy re-authenticates each connect.
+      expect((res.payload as { auth?: unknown } | undefined)?.auth).toBeUndefined();
+      const health = await rpcReq(ws, "health");
+      expect(health.ok).toBe(true);
+      ws.close();
+    });
+  });
+
   test("allows control ui with stale device identity when device auth is disabled", async () => {
     testState.gatewayControlUi = { dangerouslyDisableDeviceAuth: true };
     testState.gatewayAuth = { mode: "token", token: "secret" };

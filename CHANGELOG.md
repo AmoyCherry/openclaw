@@ -11,6 +11,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Gateway/Control UI: honor `gateway.auth.mode: "trusted-proxy"` for Control UI (and webchat) WebSocket connections so the reverse-proxy user identity is accepted and device pairing is skipped, instead of always falling back to "pairing required". Previously trusted-proxy auth only worked for CLI clients, forcing web users to set `controlUi.dangerouslyDisableDeviceAuth`.
 - Agents/Tool dispatch: await block-reply flush before tool execution starts so buffered block replies preserve message ordering around tool calls. (#25427) Thanks @SidQin-cyber.
 - macOS/Menu bar: stop reusing the injector delegate for the "Usage cost (30 days)" submenu to prevent recursive submenu injection loops when opening cost history. (#25341) Thanks @yingchunbai.
 - Control UI/Chat images: harden image-open clicks against reverse tabnabbing by using opener isolation (`noopener,noreferrer` plus `window.opener = null`). (#18685) Thanks @Mariana-Codebase.
