@@ -380,6 +380,8 @@ export function attachGatewayWsMessageHandler(params: {
           rateLimiter,
           clientIp,
         });
+        const trustedProxyControlUiAuthOk =
+          isControlUi && authResult.ok && authResult.method === "trusted-proxy";
         const rejectUnauthorized = (failedAuth: GatewayAuthResult) => {
           markHandshakeFailure("unauthorized", {
             authMode: resolvedAuth.mode,
@@ -418,7 +420,11 @@ export function attachGatewayWsMessageHandler(params: {
           close(1008, truncateCloseReason(authMessage));
         };
         const clearUnboundScopes = () => {
-          if (scopes.length > 0 && !controlUiAuthPolicy.allowBypass) {
+          if (
+            scopes.length > 0 &&
+            !controlUiAuthPolicy.allowBypass &&
+            !trustedProxyControlUiAuthOk
+          ) {
             scopes = [];
             connectParams.scopes = scopes;
           }
@@ -433,6 +439,7 @@ export function attachGatewayWsMessageHandler(params: {
             isControlUi,
             controlUiAuthPolicy,
             sharedAuthOk,
+            trustedProxyAuthOk: trustedProxyControlUiAuthOk,
             authOk,
             hasSharedAuth,
             isLocalClient,
@@ -564,8 +571,11 @@ export function attachGatewayWsMessageHandler(params: {
         const skipPairingForOperatorSharedAuth =
           role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
         const skipPairing =
-          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
-          skipPairingForOperatorSharedAuth;
+          shouldSkipControlUiPairing(
+            controlUiAuthPolicy,
+            sharedAuthOk,
+            trustedProxyControlUiAuthOk,
+          ) || skipPairingForOperatorSharedAuth;
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {

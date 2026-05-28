@@ -89,6 +89,21 @@ describe("ws connect policy", () => {
       }).kind,
     ).toBe("allow");
 
+    // Trusted-proxy Control UI auth is already bound to the proxy identity.
+    expect(
+      evaluateMissingDeviceIdentity({
+        hasDeviceIdentity: false,
+        role: "operator",
+        isControlUi: true,
+        controlUiAuthPolicy: controlUiStrict,
+        sharedAuthOk: true,
+        trustedProxyAuthOk: true,
+        authOk: true,
+        hasSharedAuth: false,
+        isLocalClient: false,
+      }).kind,
+    ).toBe("allow");
+
     // Control UI without allowInsecureAuth, even on localhost -> rejected.
     const controlUiNoInsecure = resolveControlUiAuthPolicy({
       isControlUi: true,
@@ -162,5 +177,6 @@ describe("ws connect policy", () => {
     expect(shouldSkipControlUiPairing(bypass, true)).toBe(true);
     expect(shouldSkipControlUiPairing(bypass, false)).toBe(false);
     expect(shouldSkipControlUiPairing(strict, true)).toBe(false);
+    expect(shouldSkipControlUiPairing(strict, true, true)).toBe(true);
   });
 });
