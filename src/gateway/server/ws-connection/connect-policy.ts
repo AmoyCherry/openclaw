@@ -1,8 +1,10 @@
+import type { GatewayAuthResult } from "../../auth.js";
 import type { ConnectParams } from "../../protocol/index.js";
 import type { GatewayRole } from "../../role-policy.js";
 import { roleCanSkipDeviceIdentity } from "../../role-policy.js";
 
 export type ControlUiAuthPolicy = {
+  isControlUi: boolean;
   allowInsecureAuthConfigured: boolean;
   dangerouslyDisableDeviceAuth: boolean;
   allowBypass: boolean;
@@ -24,6 +26,7 @@ export function resolveControlUiAuthPolicy(params: {
   const dangerouslyDisableDeviceAuth =
     params.isControlUi && params.controlUiConfig?.dangerouslyDisableDeviceAuth === true;
   return {
+    isControlUi: params.isControlUi,
     allowInsecureAuthConfigured,
     dangerouslyDisableDeviceAuth,
     // `allowInsecureAuth` must not bypass secure-context/device-auth requirements.
@@ -35,8 +38,11 @@ export function resolveControlUiAuthPolicy(params: {
 export function shouldSkipControlUiPairing(
   policy: ControlUiAuthPolicy,
   sharedAuthOk: boolean,
+  authMethod?: GatewayAuthResult["method"],
 ): boolean {
-  return policy.allowBypass && sharedAuthOk;
+  return (
+    policy.isControlUi && sharedAuthOk && (policy.allowBypass || authMethod === "trusted-proxy")
+  );
 }
 
 export type MissingDeviceIdentityDecision =
@@ -52,13 +58,15 @@ export function evaluateMissingDeviceIdentity(params: {
   controlUiAuthPolicy: ControlUiAuthPolicy;
   sharedAuthOk: boolean;
   authOk: boolean;
+  authMethod?: GatewayAuthResult["method"];
   hasSharedAuth: boolean;
   isLocalClient: boolean;
 }): MissingDeviceIdentityDecision {
   if (params.hasDeviceIdentity) {
     return { kind: "allow" };
   }
-  if (params.isControlUi && !params.controlUiAuthPolicy.allowBypass) {
+  const trustedProxyAuthOk = params.authOk && params.authMethod === "trusted-proxy";
+  if (params.isControlUi && !params.controlUiAuthPolicy.allowBypass && !trustedProxyAuthOk) {
     // Allow localhost Control UI connections when allowInsecureAuth is configured.
     // Localhost has no network interception risk, and browser SubtleCrypto
     // (needed for device identity) is unavailable in insecure HTTP contexts.

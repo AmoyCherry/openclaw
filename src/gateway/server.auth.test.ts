@@ -112,6 +112,30 @@ const NODE_CLIENT = {
   mode: GATEWAY_CLIENT_MODES.NODE,
 };
 
+const TRUSTED_PROXY_CONTROL_UI_ORIGIN = "https://openclaw.example.com";
+
+async function configureTrustedProxyControlUi() {
+  testState.gatewayAuth = {
+    mode: "trusted-proxy",
+    trustedProxy: { userHeader: "x-authentik-username" },
+  };
+  testState.gatewayControlUi = { allowedOrigins: [TRUSTED_PROXY_CONTROL_UI_ORIGIN] };
+  const { writeConfigFile } = await import("../config/config.js");
+  await writeConfigFile({
+    gateway: {
+      trustedProxies: ["127.0.0.1"],
+    },
+  });
+}
+
+async function openTrustedProxyControlUiWs(port: number) {
+  return await openWs(port, {
+    origin: TRUSTED_PROXY_CONTROL_UI_ORIGIN,
+    "x-authentik-username": "peter@example.com",
+    "x-forwarded-for": "192.0.2.10",
+  });
+}
+
 async function expectHelloOkServerVersion(port: number, expectedVersion: string) {
   const ws = await openWs(port);
   try {
@@ -131,7 +155,7 @@ async function expectHelloOkServerVersion(port: number, expectedVersion: string)
 }
 
 async function createSignedDevice(params: {
-  token: string;
+  token: string | null;
   scopes: string[];
   clientId: string;
   clientMode: string;
@@ -889,6 +913,61 @@ describe("gateway server auth/connect", () => {
     } finally {
       restoreGatewayToken(prevToken);
     }
+  });
+
+  test("allows control ui trusted-proxy auth to skip device pairing", async () => {
+    await configureTrustedProxyControlUi();
+    await withGatewayServer(async ({ port }) => {
+      const ws = await openTrustedProxyControlUiWs(port);
+      const nonce = await readConnectChallengeNonce(ws);
+      const scopes = ["operator.admin"];
+      const { randomUUID } = await import("node:crypto");
+      const os = await import("node:os");
+      const path = await import("node:path");
+      const { device } = await createSignedDevice({
+        token: null,
+        scopes,
+        clientId: CONTROL_UI_CLIENT.id,
+        clientMode: CONTROL_UI_CLIENT.mode,
+        identityPath: path.join(os.tmpdir(), `openclaw-trusted-proxy-device-${randomUUID()}.json`),
+        nonce: String(nonce),
+      });
+      const res = await connectReq(ws, {
+        skipDefaultAuth: true,
+        scopes,
+        device,
+        client: {
+          ...CONTROL_UI_CLIENT,
+        },
+      });
+      expect(res.ok).toBe(true);
+      const { getPairedDevice, listDevicePairing } = await import("../infra/device-pairing.js");
+      const pairing = await listDevicePairing();
+      expect(pairing.pending.filter((entry) => entry.deviceId === device.id)).toEqual([]);
+      expect(await getPairedDevice(device.id)).toBeNull();
+      expect((res.payload as { auth?: unknown } | undefined)?.auth).toBeUndefined();
+      const health = await rpcReq(ws, "health");
+      expect(health.ok).toBe(true);
+      ws.close();
+    });
+  });
+
+  test("allows control ui trusted-proxy auth without device identity", async () => {
+    await configureTrustedProxyControlUi();
+    await withGatewayServer(async ({ port }) => {
+      const ws = await openTrustedProxyControlUiWs(port);
+      const res = await connectReq(ws, {
+        skipDefaultAuth: true,
+        device: null,
+        client: {
+          ...CONTROL_UI_CLIENT,
+        },
+      });
+      expect(res.ok).toBe(true);
+      const status = await rpcReq(ws, "status");
+      expect(status.ok).toBe(true);
+      ws.close();
+    });
   });
 
   test("allows control ui with stale device identity when device auth is disabled", async () => {

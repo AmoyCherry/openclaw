@@ -112,6 +112,20 @@ describe("ws connect policy", () => {
       evaluateMissingDeviceIdentity({
         hasDeviceIdentity: false,
         role: "operator",
+        isControlUi: true,
+        controlUiAuthPolicy: controlUiNoInsecure,
+        sharedAuthOk: true,
+        authOk: true,
+        authMethod: "trusted-proxy",
+        hasSharedAuth: false,
+        isLocalClient: false,
+      }).kind,
+    ).toBe("allow");
+
+    expect(
+      evaluateMissingDeviceIdentity({
+        hasDeviceIdentity: false,
+        role: "operator",
         isControlUi: false,
         controlUiAuthPolicy: policy,
         sharedAuthOk: true,
@@ -148,7 +162,7 @@ describe("ws connect policy", () => {
     ).toBe("reject-device-required");
   });
 
-  test("pairing bypass requires control-ui bypass + shared auth", () => {
+  test("pairing bypass requires control-ui shared auth bypass", () => {
     const bypass = resolveControlUiAuthPolicy({
       isControlUi: true,
       controlUiConfig: { dangerouslyDisableDeviceAuth: true },
@@ -162,5 +176,17 @@ describe("ws connect policy", () => {
     expect(shouldSkipControlUiPairing(bypass, true)).toBe(true);
     expect(shouldSkipControlUiPairing(bypass, false)).toBe(false);
     expect(shouldSkipControlUiPairing(strict, true)).toBe(false);
+    expect(shouldSkipControlUiPairing(strict, true, "trusted-proxy")).toBe(true);
+    expect(
+      shouldSkipControlUiPairing(
+        resolveControlUiAuthPolicy({
+          isControlUi: false,
+          controlUiConfig: undefined,
+          deviceRaw: null,
+        }),
+        true,
+        "trusted-proxy",
+      ),
+    ).toBe(false);
   });
 });

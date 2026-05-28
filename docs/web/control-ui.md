@@ -57,6 +57,9 @@ you revoke it with `openclaw devices revoke --device <id> --role <role>`. See
 
 - Local connections (`127.0.0.1`) are auto-approved.
 - Remote connections (LAN, Tailnet, etc.) require explicit approval.
+- Trusted proxy auth (`gateway.auth.mode: "trusted-proxy"`) uses the configured
+  identity header as gateway auth and skips Control UI device pairing. See
+  [Trusted Proxy Auth](/gateway/trusted-proxy-auth).
 - Each browser profile generates a unique device ID, so switching browsers or
   clearing browser data will require re-pairing.
 
