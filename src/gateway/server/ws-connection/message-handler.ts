@@ -564,7 +564,7 @@ export function attachGatewayWsMessageHandler(params: {
         const skipPairingForOperatorSharedAuth =
           role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
         const skipPairing =
-          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
+          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk, authMethod) ||
           skipPairingForOperatorSharedAuth;
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {

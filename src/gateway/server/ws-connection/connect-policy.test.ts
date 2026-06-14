@@ -163,4 +163,15 @@ describe("ws connect policy", () => {
     expect(shouldSkipControlUiPairing(bypass, false)).toBe(false);
     expect(shouldSkipControlUiPairing(strict, true)).toBe(false);
   });
+
+  test("trusted-proxy auth skips control-ui pairing without dangerouslyDisableDeviceAuth", () => {
+    const strict = resolveControlUiAuthPolicy({
+      isControlUi: true,
+      controlUiConfig: undefined,
+      deviceRaw: null,
+    });
+    expect(shouldSkipControlUiPairing(strict, true, "trusted-proxy")).toBe(true);
+    expect(shouldSkipControlUiPairing(strict, false, "trusted-proxy")).toBe(false);
+    expect(shouldSkipControlUiPairing(strict, true, "token")).toBe(false);
+  });
 });

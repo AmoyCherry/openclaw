@@ -35,7 +35,11 @@ export function resolveControlUiAuthPolicy(params: {
 export function shouldSkipControlUiPairing(
   policy: ControlUiAuthPolicy,
   sharedAuthOk: boolean,
+  authMethod?: string,
 ): boolean {
+  if (sharedAuthOk && authMethod === "trusted-proxy") {
+    return true;
+  }
   return policy.allowBypass && sharedAuthOk;
 }
 
