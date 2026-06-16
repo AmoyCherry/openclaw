@@ -891,6 +891,52 @@ describe("gateway server auth/connect", () => {
     }
   });
 
+  test("control ui skips device pairing when trusted-proxy auth succeeds", async () => {
+    // Trusted-proxy mode delegates user authentication to the reverse proxy, so the
+    // Control UI must not be forced into device pairing on top of it (regression for
+    // Control UI showing "pairing required" under trusted-proxy auth).
+    testState.gatewayAuth = {
+      mode: "trusted-proxy",
+      allowTailscale: false,
+      trustedProxy: { userHeader: "x-forwarded-user" },
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any;
+    const { writeConfigFile } = await import("../config/config.js");
+    await writeConfigFile({
+      gateway: {
+        trustedProxies: ["127.0.0.1"],
+      },
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any);
+    await withGatewayServer(async ({ port }) => {
+      const ws = await openWs(port, {
+        origin: originForPort(port),
+        "x-forwarded-user": "alice@example.com",
+      });
+      try {
+        const res = await connectReq(ws, {
+          skipDefaultAuth: true,
+          scopes: ["operator.read"],
+          client: { ...CONTROL_UI_CLIENT },
+        });
+        expect(res.ok).toBe(true);
+        expect((res.payload as { type?: unknown } | undefined)?.type).toBe("hello-ok");
+
+        // Pairing must be skipped entirely: no pending pairing request is created.
+        const { loadOrCreateDeviceIdentity } = await import("../infra/device-identity.js");
+        const { listDevicePairing } = await import("../infra/device-pairing.js");
+        const identity = loadOrCreateDeviceIdentity();
+        const pairing = await listDevicePairing();
+        expect(pairing.pending.filter((entry) => entry.deviceId === identity.deviceId)).toEqual([]);
+
+        const health = await rpcReq(ws, "health");
+        expect(health.ok).toBe(true);
+      } finally {
+        ws.close();
+      }
+    });
+  });
+
   test("allows control ui with stale device identity when device auth is disabled", async () => {
     testState.gatewayControlUi = { dangerouslyDisableDeviceAuth: true };
     testState.gatewayAuth = { mode: "token", token: "secret" };

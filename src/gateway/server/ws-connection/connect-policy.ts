@@ -39,6 +39,49 @@ export function shouldSkipControlUiPairing(
   return policy.allowBypass && sharedAuthOk;
 }
 
+/**
+ * Decide whether a connecting client may skip the device-pairing step.
+ *
+ * Device pairing is primarily a MitM protection for clients that authenticate
+ * with a browser-held shared secret (token/password): even with the secret, a
+ * new device must be approved. It is unnecessary when trust is established some
+ * other way:
+ *  - `dangerouslyDisableDeviceAuth` break-glass bypass for the Control UI.
+ *  - Trusted-proxy auth: the user identity is vouched for by an external trusted
+ *    layer (reverse proxy + network policy) and no browser-held secret is
+ *    involved, so pairing is redundant on every surface (CLI, Control UI,
+ *    webchat). This is gateway-level operator trust, same as a valid token.
+ *  - Non-browser operator clients (e.g. CLI) using shared token/password, where
+ *    the secret does not live in an interceptable browser context.
+ *
+ * The device signature is still verified separately, so skipping pairing does
+ * not weaken the proof that the client controls its device key.
+ */
+export function shouldSkipDevicePairing(params: {
+  controlUiAuthPolicy: ControlUiAuthPolicy;
+  role: GatewayRole;
+  sharedAuthOk: boolean;
+  authMethod: string | undefined;
+  isControlUi: boolean;
+  isWebchat: boolean;
+}): boolean {
+  if (shouldSkipControlUiPairing(params.controlUiAuthPolicy, params.sharedAuthOk)) {
+    return true;
+  }
+  if (params.role !== "operator" || !params.sharedAuthOk) {
+    return false;
+  }
+  // Trusted-proxy trust comes from network position + proxy-injected identity,
+  // not a browser-held secret, so device pairing adds nothing. Applies to all
+  // surfaces, including the Control UI.
+  if (params.authMethod === "trusted-proxy") {
+    return true;
+  }
+  // Shared token/password is gateway-level operator trust, but browser surfaces
+  // still require pairing to protect the browser-held secret against MitM.
+  return !params.isControlUi && !params.isWebchat;
+}
+
 export type MissingDeviceIdentityDecision =
   | { kind: "allow" }
   | { kind: "reject-control-ui-insecure-auth" }

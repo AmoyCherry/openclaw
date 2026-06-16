@@ -76,7 +76,7 @@ import { formatGatewayAuthFailureMessage, type AuthProvidedKind } from "./auth-m
 import {
   evaluateMissingDeviceIdentity,
   resolveControlUiAuthPolicy,
-  shouldSkipControlUiPairing,
+  shouldSkipDevicePairing,
 } from "./connect-policy.js";
 import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-flood-guard.js";
 
@@ -559,13 +559,19 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
 
-        // Shared token/password auth is already gateway-level trust for operator clients.
-        // In that case, don't force device pairing on first connect.
-        const skipPairingForOperatorSharedAuth =
-          role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
-        const skipPairing =
-          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
-          skipPairingForOperatorSharedAuth;
+        // Skip the device-pairing step when trust is already established (operator
+        // shared token/password, trusted-proxy on any surface, or the Control UI
+        // break-glass bypass). Trusted-proxy auth in particular establishes operator
+        // identity via the reverse proxy, so the Control UI must not be forced into
+        // device pairing.
+        const skipPairing = shouldSkipDevicePairing({
+          controlUiAuthPolicy,
+          role,
+          sharedAuthOk,
+          authMethod,
+          isControlUi,
+          isWebchat,
+        });
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
             if (!items || items.length === 0) {

@@ -298,6 +298,10 @@ Make sure your proxy:
 - Passes the identity headers on WebSocket upgrade requests (not just HTTP)
 - Doesn't have a separate auth path for WebSocket connections
 
+### Control UI and device pairing
+
+Under trusted-proxy auth the Control UI is authenticated by the proxy-supplied `userHeader` and connects **without** a separate device-pairing approval, so you do not need `controlUi.dangerouslyDisableDeviceAuth`. A failed proxy handshake is reported as an `unauthorized` error (see the reasons above), not a pairing prompt.
+
 ## Migration from Token Auth
 
 If you're moving from token auth to trusted-proxy:
